@@ -1,0 +1,189 @@
+---
+title: "`spotifyr` demo"
+author: "Rob Weyant"
+date: "11/9/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/rweyant/Documents/personal/spotifyr-presentation")
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+```
+
+# Basic Setup
+
+```{r initial}
+# Load Package
+library(spotifyr)
+
+# Get credentials and make available to package
+# Requires SPOTIFY_CLIENT and SPOTIFY_SECRET to be set as environment variables
+# Get Client ID and Secret here: https://developer.spotify.com/
+set_tokens()
+```
+
+# Basic Usage
+
+## Artist information
+
+```{r artists}
+electric_wizard_uri <- '4htjQW3lgIwL6fEJlTOez4'
+artist <- get_artist(electric_wizard_uri)
+str(artist)
+# artist %>% extract(c('name', 'popularity')) %>% data.frame
+# unlist(artist$genres)
+```
+
+## Album metadata
+
+```{r albums}
+monnos_id <- '6mwaHNgIMNdUPlcgymNUbn'
+album <- get_album(monnos_id)
+names(album)
+# str(album)
+album %>% extract(c('name', 'label', 'popularity', 'release_date')) %>% data.frame
+```
+
+### Album art
+
+```{r album-art, eval=FALSE}
+![](`r album$images[[1]]$url`)
+```
+
+![](`r album$images[[1]]$url`)
+
+# Get Song Metadata
+
+```{r tracks}
+war_pigs_uri <- '2rd9ETlulTbz6BYZcdvIE1'
+track <- get_track(war_pigs_uri)
+names(track)
+str(track)
+track$name
+track$artist[[1]]$name
+track$album$name
+
+audio_analysis <- get_track_audio_analysis(war_pigs_uri)
+names(audio_analysis)
+# str(audio_analysis)
+
+audio_features <- get_track_audio_features(war_pigs_uri)
+names(audio_features)
+str(audio_features)
+audio_features %>% extract(c('danceability', 'energy', 'loudness', 'tempo')) %>% data.frame
+```
+
+# User specific endpoints
+
+## Rob's Top Artists
+
+```{r, eval = FALSE}
+user_auth()
+get_saved_tracks()
+```
+
+```{r top-tracks}
+saved_tracks <- readRDS('audio-features.rds')
+top_artists <- saved_tracks %>% 
+  group_by(artist) %>% 
+  summarize(n = n()) %>% 
+  ungroup %>% 
+  mutate(pct_rank = percent_rank(n)) %>% 
+  arrange(pct_rank %>% desc) %>% 
+  mutate(artist = factor(artist, levels = artist))
+
+ggplot(top_artists %>% filter(pct_rank > 0.8)) + 
+  geom_bar(aes(x = artist, y = n), stat='identity') +
+  theme_bw(base_size = 16) + 
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle('Artists with Most Saved Tracks in Rob\'s Library')
+```
+
+
+# Rob's Top Genres
+
+```{r, eval = FALSE}
+user_auth()
+get_user_top('artists')
+```
+
+```{r}
+artists_df <- readRDS('top-artists.rds')
+top_genres <- artists_df %>% 
+  group_by(genres) %>% 
+  summarize(n = n()) %>% 
+  ungroup %>% 
+  mutate(pct_rank = percent_rank(n)) %>% 
+  arrange(pct_rank %>% desc) %>% 
+  mutate(genres = factor(genres, levels = genres))
+
+ggplot(top_genres %>% filter(pct_rank > 0.8)) + 
+  geom_bar(aes(x = genres, y = n), stat='identity') +
+  theme_bw(base_size = 16) + 
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle('Genres of the Top Artists Saved in Rob\'s Library')
+```
+
+# Characteristics of Rob's Saved Tracks
+
+```{r histograms, echo = FALSE, warning=FALSE, message=FALSE}
+ggplot(saved_tracks) + 
+  geom_histogram(aes(x = danceability), color = 'black') +
+  theme_bw(base_size = 16) + 
+  ggtitle('Danceability')
+ggplot(saved_tracks) + 
+  geom_histogram(aes(x = energy), color = 'black') + 
+  theme_bw(base_size = 16) + 
+  ggtitle('Energy')
+ggplot(saved_tracks) + 
+  geom_histogram(aes(x = loudness), color = 'black') +
+  theme_bw(base_size = 16) + 
+  ggtitle('Loudness')
+ggplot(saved_tracks) + 
+  geom_histogram(aes(x = acousticness), color = 'black') + 
+  theme_bw(base_size = 16) + 
+  ggtitle('Acousticness')
+```
+
+
+
+# Player Endpoints 
+
+```{r player, eval=FALSE}
+set_tokens()
+user_auth()
+
+user_id <- 'rweyant'
+
+otc_uri <- 'spotify:track:4ZfeuBsnsdiXAemBFF0AmB'
+nmh_uri <- 'spotify:track:17Nowmq4iF2rkbd1rAe1Vt'
+tmg_uri <- 'spotify:track:2M1Qc1mGSI1IYtmJzQtfPq'
+
+# Create a playlist
+playlist <- create_playlist(user_id = user_id, name = 'spotifyr-test')
+playlist_id <- playlist$id
+
+# Add some songs
+add_tracks_to_playlist(user_id = user_id, playlist_id = playlist_id, uris = otc_uri)
+add_tracks_to_playlist(user_id = user_id, playlist_id = playlist_id, uris = nmh_uri)
+add_tracks_to_playlist(user_id = user_id, playlist_id = playlist_id, uris = tmg_uri)
+
+
+# Start Playing
+start_user_playback()
+
+# Check Status
+get_user_playback()
+
+
+get_currently_playing_track()
+pause_user_playback()
+
+skip_user_playback_next()
+skip_user_playback_previous()
+seek_user_playback(position_ms = 1000)
+
+```
